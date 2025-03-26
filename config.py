@@ -9,6 +9,11 @@ AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID')
 AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
 AWS_REGION = os.getenv('AWS_REGION')
 
+# Gong API Configuration
+GONG_ACCESS_KEY = os.getenv('GONG_ACCESS_KEY')
+GONG_SECRET_KEY = os.getenv('GONG_SECRET_KEY')
+GONG_BASE_URL = os.getenv('GONG_BASE_URL')
+
 # Ideal Pitch Template
 IDEAL_PITCH_TEMPLATE = """
 Key Components of an Ideal Sales Pitch:
@@ -65,6 +70,9 @@ Key Points Covered:
 
 Missing Key Points:
 {{ missing_points }}
+
+Objections:
+{{ objections }}
 
 Recommendations:
 {{ recommendations }}
