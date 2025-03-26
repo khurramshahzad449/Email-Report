@@ -1,0 +1,23 @@
+John (Sales Rep): Hi Bob, thanks for taking the time to speak today! I’d love to learn more about your current CRM setup and see if we can help optimize your sales process. Can you share a bit about what you're using now and any challenges you're facing?
+
+Bob (Buyer): Sure, John. Right now, we’re using a legacy CRM, and honestly, it’s a bit clunky. Our sales team complains that it’s not user-friendly, and getting meaningful reports out of it is a nightmare.
+
+John: That makes sense. We hear that a lot from companies using older systems. One of the biggest advantages of our CRM is the AI-driven insights feature. It not only helps with lead scoring but also automates follow-ups and provides predictive analytics. This means your team can prioritize the most promising opportunities instead of wasting time on low-value leads. How does that sound?
+
+Bob: That’s interesting. Right now, we rely on our reps to manually qualify leads, which is time-consuming and inconsistent. AI-driven lead scoring could really help.
+
+John: Absolutely! Another key differentiator is our seamless integration with the tools you already use—whether it’s email, ERP, or your marketing automation system. This reduces manual data entry and ensures your teams always have up-to-date information. Does integration pose a challenge with your current system?
+
+Bob: Oh, big time. We often have to export and import data manually, which is a huge headache.
+
+John: We’d eliminate that friction. Finally, our CRM is built for customization and scalability. Whether you have a growing sales team or unique workflows, our system adapts without forcing you into rigid processes. As your company grows, our platform grows with you.
+
+Bob: That’s great. We’ve had to build workarounds in our current CRM, which isn’t ideal.
+
+John: Exactly. We’d love to give you a hands-on demo so you can see how this all works in action. Would you be open to scheduling a time for that?
+
+Bob: Yeah, let’s do it. I’d like to see how it compares to what we have now.
+
+John: Fantastic! I’ll send over a calendar invite for a demo and include some case studies from companies in your industry. Looking forward to it, Bob!
+
+Bob: Sounds good, John. Talk soon!
