@@ -45,38 +45,15 @@ ANALYSIS_PARAMETERS = {
 
 # Email Template
 EMAIL_TEMPLATE = """
-Subject: Sales Call Analysis Report - {{ call_date }}
+* What You Did Well: 
+{{ didWell }}
 
-Dear {{ sales_rep_name }},
+* What Needs Improvement: 
+{{ improvements }}  
 
-I've analyzed your recent sales call with {{ customer_name }} and prepared a detailed report of your performance.
+* Final Score: {{ finalScore }}
 
-Call Details:
-- Date: {{ call_date }}
-- Duration: {{ call_duration }}
-- Customer: {{ customer_name }}
+* Coaching Tip:
+{{ coachingTips }}
 
-Analysis Process:
-{{ analysis_steps }}
-
-Strengths:
-{{ strengths }}
-
-Areas for Improvement:
-{{ improvements }}
-
-Key Points Covered:
-{{ covered_points }}
-
-Missing Key Points:
-{{ missing_points }}
-
-Objections:
-{{ objections }}
-
-Recommendations:
-{{ recommendations }}
-
-Best regards,
-Sales Analysis Team
 """ 

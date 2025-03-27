@@ -21,42 +21,45 @@ class ClaudeAnalyzer:
             verify=False
         )
 
-    def analyze_transcript(self, transcript, ideal_pitch):
+    def analyze_transcript(self, transcript, ideal_pitch, coaching_guide):
         prompt = f"""You are an expert sales coach analyzing sales call transcripts.
-        Your task is to analyze the transcript and ensure that the key points have been presented to the buyer and provide detailed feedback.
-        Focus on identifying points that were covered, points that were missed, the effectiveness of the pitch based on the customer's response.
-        Provide your analysis in a structured format with clear sections.
-        First, let's understand the points to be covered in the pitch:
-        {ideal_pitch}
-        Now, let's analyze this call transcript:
-        {transcript}
+        The AI Sales Coach acts as: 
+          1. Evaluator of live or recorded sales calls 
+          2. Scorer based on structured pitch performance 
+          3. Coach that delivers personalized feedback to the rep 
+          4. Trainer that surfaces missed messaging, and improves objection handling 
+
+        Your primary goal is to To ensure sales reps consistently pitch EveryAction as the only AI-powered 
+        advocacy and fundraising platform built on a nonprofit CRM, and use differentiated messaging to 
+        close midmarket nonprofit deals ($3M–$15M orgs). 
+
+        Use the evaluation categories and weighting specified in this coaching guide: {coaching_guide}. 
+
+        The key pitch elements that you should listen for should be extracted from the ideal pitch: {ideal_pitch}.
+
+        These are also called out in the coaching guide. The coaching guide also provides missed oportunities to
+        flag and objections to handle. It also provides a grading template which should be used to generate the
+        final report.
+
+        Now, let's analyze this call transcript and provide a detailed analysis of these points:
+            1. Evaluate this sales call transcript. Grade the rep across messaging accuracy, 
+            competitive differentiation, needs discovery, objection handling, and pitch structure. 
+            Use ideal pitch messaging framework.
+            2. What key product or market points did the rep fail to mention? Suggest where and how they could 
+            have improved this pitch using the EveryAction case study or feature set.
+            3. Analyze how the rep handled objections. Did they effectively counter concerns about existing tools or 
+            integrations? Suggest better phrasing aligned with EveryAction's positioning.
+
+        The call transcript is: {transcript}
+
         Please provide your analysis in the following JSON format, including your thinking process:
         {{
-            "analysis_steps": [
-                {{
-                    "step": "Initial Assessment",
-                    "thinking": "Your thoughts on the overall call structure and flow",
-                    "observations": ["Key observations about the call"]
-                }},
-                {{
-                    "step": "Key Pitch Point Coverage",
-                    "thinking": "How well did the sales rep cover the key points during the conversation",
-                    "observations": ["Specific points about coverage of key points covered and missed"]
-                }},
-                {{
-                    "step": "Effectiveness Analysis",
-                    "thinking": "Analysis of the sales rep's effectiveness",
-                    "observations": ["Observations about effectiveness"]
-                }}
-            ],
-            "strengths": ["list of strengths with brief explanations"],
+            "didWell": ["list of strengths with brief explanations"],
             "improvements": ["list of areas for improvement with specific examples"],
-            "covered_points": ["list of key points that were covered with context"],
-            "missing_points": ["list of key points that were missed with impact analysis"],
-            "objections": ["list of objections that were raised by the customer"],
-            "recommendations": ["list of specific recommendations with reasoning"]
+            "finalScore": <score between 1 and 10 rating the rep's performance>,
+            "coachingTips": ["list of coaching tips to improve the rep's performance"]
         }}"""
-        
+
         response = self.bedrock.invoke_model(
             modelId='anthropic.claude-3-sonnet-20240229-v1:0',
             body=json.dumps({
@@ -68,6 +71,7 @@ class ClaudeAnalyzer:
         )
         
         response_body = json.loads(response['body'].read())
+        print(response_body)
         return json.loads(response_body['content'][0]['text'])
 
 class ReportGenerator:
@@ -75,26 +79,12 @@ class ReportGenerator:
         self.email_template = Template(EMAIL_TEMPLATE)
 
     def generate_email(self, analysis_results, call_details):
-        # Format analysis steps
-        analysis_steps = ""
-        for step in analysis_results['analysis_steps']:
-            analysis_steps += f"\n{step['step']}:\n"
-            analysis_steps += f"Thinking: {step['thinking']}\n"
-            analysis_steps += "Observations:\n" + "\n".join(f"- {obs}" for obs in step['observations']) + "\n"
-
         # Create template variables
         template_vars = {
-            'call_date': call_details['date'],
-            'sales_rep_name': call_details['sales_rep'],
-            'customer_name': call_details['customer'],
-            'call_duration': call_details['duration'],
-            'analysis_steps': analysis_steps,
-            'strengths': '\n'.join(f"- {s}" for s in analysis_results['strengths']),
-            'improvements': '\n'.join(f"- {i}" for i in analysis_results['improvements']),
-            'covered_points': '\n'.join(f"- {p}" for p in analysis_results['covered_points']),
-            'missing_points': '\n'.join(f"- {p}" for p in analysis_results['missing_points']),
-            'objections': '\n'.join(f"- {p}" for p in analysis_results['objections']),
-            'recommendations': '\n'.join(f"- {r}" for r in analysis_results['recommendations'])
+            'didWell': '\n'.join(f"- {s}" for s in analysis_results['didWell']),
+            'improvements': '\n'.join(f"- {s}" for s in analysis_results['improvements']),
+            'finalScore': analysis_results['finalScore'],
+            'coachingTips': '\n'.join(f"- {s}" for s in analysis_results['coachingTips'])
         }
 
         # Render the template
@@ -188,11 +178,6 @@ def fetch_gong_transcript(conversation_id):
             verify=False  # Disable SSL verification
         )
         
-        # Print response details for debugging
-        print(f"Response status code: {response.status_code}")
-        print(f"Response headers: {response.headers}")
-        print(f"Raw response content: {response.text[:500]}...")  # Print first 500 chars of response
-        
         if response.status_code == 200:
             try:
                 data = response.json()
@@ -225,7 +210,7 @@ def fetch_gong_transcript(conversation_id):
         print(f"Error fetching Gong transcript: {e}")
         return None
 
-def process_transcript(transcript, ideal_pitch, sales_rep, customer, duration, output_file):
+def process_transcript(transcript, ideal_pitch, coaching_guide, sales_rep, customer, duration, output_file):
     """Process a single transcript and generate a report."""
     if not transcript:
         print("Failed to read transcript. Skipping...")
@@ -247,7 +232,8 @@ def process_transcript(transcript, ideal_pitch, sales_rep, customer, duration, o
     # Analyze transcript with Claude
     analysis_results = claude_analyzer.analyze_transcript(
         transcript,
-        ideal_pitch
+        ideal_pitch,
+        coaching_guide
     )
 
     print("Generating report...")
@@ -269,6 +255,7 @@ def main():
     parser = argparse.ArgumentParser(description='Analyze sales call transcript using AWS Bedrock Claude')
     parser.add_argument('--transcript', type=str, help='Path to the transcript file (required if not using --gong-ids)')
     parser.add_argument('--ideal-pitch', type=str, required=True, help='Path to the Word document containing the ideal pitch')
+    parser.add_argument('--coaching-guide', type=str, required=True, help='Path to the Word document containing the coaching guide')
     parser.add_argument('--sales-rep', type=str, required=True, help='Name of the sales representative')
     parser.add_argument('--customer', type=str, required=True, help='Name of the customer')
     parser.add_argument('--duration', type=str, default='45 minutes', help='Duration of the call')
@@ -288,6 +275,12 @@ def main():
         print("Failed to read ideal pitch document. Exiting...")
         return
 
+    # Read coaching guide from Word document
+    coaching_guide = read_word_document(args.coaching_guide)
+    if not coaching_guide:
+        print("Failed to read coaching guide document. Exiting...")
+        return
+
     if args.gong_ids:
         # Process Gong transcripts
         gong_ids = [id.strip() for id in args.gong_ids.split(',')]
@@ -298,6 +291,7 @@ def main():
             process_transcript(
                 transcript,
                 ideal_pitch,
+                coaching_guide,
                 args.sales_rep,
                 args.customer,
                 args.duration,
@@ -309,6 +303,7 @@ def main():
         process_transcript(
             transcript,
             ideal_pitch,
+            coaching_guide,
             args.sales_rep,
             args.customer,
             args.duration,
