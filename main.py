@@ -23,7 +23,7 @@ class ClaudeAnalyzer:
 
     def analyze_transcript(self, transcript, ideal_pitch, coaching_guide):
         prompt = f"""You are an expert sales coach analyzing sales call transcripts.
-        The AI Sales Coach acts as: 
+        You should acts as: 
           1. Evaluator of live or recorded sales calls 
           2. Scorer based on structured pitch performance 
           3. Coach that delivers personalized feedback to the rep 
@@ -51,28 +51,69 @@ class ClaudeAnalyzer:
             integrations? Suggest better phrasing aligned with EveryAction's positioning.
 
         The call transcript is: {transcript}
-
-        Please provide your analysis in the following JSON format, including your thinking process:
+        Try to use the EBI framework to provide feedback.  Be positive and constructive. 
+        IMPORTANT: Your response must be a valid JSON object with the following structure:
         {{
             "didWell": ["list of strengths with brief explanations"],
             "improvements": ["list of areas for improvement with specific examples"],
-            "finalScore": <score between 1 and 10 rating the rep's performance>,
-            "coachingTips": ["list of coaching tips to improve the rep's performance"]
-        }}"""
+            "finalScore": <number between 1 and 10>,
+            "coachingTips": ["list of coaching tips"]
+        }}
+        Do not include any markdown formatting or additional text outside the JSON structure."""
 
-        response = self.bedrock.invoke_model(
-            modelId='anthropic.claude-3-sonnet-20240229-v1:0',
-            body=json.dumps({
-                "anthropic_version": "bedrock-2023-05-31",
-                "max_tokens": 3000,
-                "temperature": 0.7,
-                "messages": [{"role": "user", "content": prompt}]
-            })
-        )
-        
-        response_body = json.loads(response['body'].read())
-        print(response_body)
-        return json.loads(response_body['content'][0]['text'])
+        try:
+            response = self.bedrock.invoke_model(
+                modelId='anthropic.claude-3-sonnet-20240229-v1:0',
+                body=json.dumps({
+                    "anthropic_version": "bedrock-2023-05-31",
+                    "max_tokens": 3000,
+                    "temperature": 0.7,
+                    "messages": [{"role": "user", "content": prompt}]
+                })
+            )
+            
+            # Parse the response from AWS Bedrock
+            response_body = json.loads(response['body'].read())
+            
+            # Extract the text content from Claude's response
+            content = response_body['content'][0]['text']
+            
+            # Clean up the response text
+            # Remove markdown code block markers and any leading/trailing whitespace
+            content = content.replace('```json', '').replace('```', '').strip()
+            
+            # Try to find JSON content within the response
+            # Look for content between first { and last }
+            start_idx = content.find('{')
+            end_idx = content.rfind('}') + 1
+            
+            if start_idx == -1 or end_idx == 0:
+                raise ValueError("No JSON object found in response")
+                
+            json_str = content[start_idx:end_idx]
+            
+            # Parse the JSON
+            result = json.loads(json_str)
+            
+            # Validate the required fields
+            required_fields = ['didWell', 'improvements', 'finalScore', 'coachingTips']
+            for field in required_fields:
+                if field not in result:
+                    raise ValueError(f"Missing required field: {field}")
+                if field == 'finalScore' and not isinstance(result[field], (int, float)):
+                    raise ValueError("finalScore must be a number")
+                if field in ['didWell', 'improvements', 'coachingTips'] and not isinstance(result[field], list):
+                    raise ValueError(f"{field} must be a list")
+            
+            return result
+            
+        except json.JSONDecodeError as e:
+            print(f"Error parsing JSON response: {e}")
+            print(f"Raw response content: {content}")
+            raise
+        except Exception as e:
+            print(f"Error in analyze_transcript: {e}")
+            raise
 
 class ReportGenerator:
     def __init__(self):
@@ -135,12 +176,118 @@ def get_gong_signature(access_key, secret_key, timestamp, request_id, method, pa
     ).digest()
     return base64.b64encode(signature).decode('utf-8')
 
+def get_gong_user_info(user_id):
+    """Fetch user information from Gong API."""
+    try:
+        timestamp = str(int(time.time() * 1000))
+        request_id = str(int(time.time() * 1000))
+        path = f"/v2/users/{user_id}"
+        method = "GET"
+        
+        # Generate signature
+        signature = get_gong_signature(
+            GONG_ACCESS_KEY,
+            GONG_SECRET_KEY,
+            timestamp,
+            request_id,
+            method,
+            path
+        )
+        
+        # Make request
+        headers = {
+            "Authorization": f"Basic {base64.b64encode(f'{GONG_ACCESS_KEY}:{GONG_SECRET_KEY}'.encode()).decode()}",
+            "X-Gong-Timestamp": timestamp,
+            "X-Gong-Request-Id": request_id,
+            "X-Gong-Signature": signature,
+            "Content-Type": "application/json"
+        }
+        
+        response = requests.get(
+            f"{GONG_BASE_URL}{path}",
+            headers=headers,
+            verify=False
+        )
+        
+        if response.status_code == 200:
+            return response.json()
+        else:
+            print(f"Error fetching user info: {response.status_code} - {response.text}")
+            return None
+            
+    except Exception as e:
+        print(f"Error fetching user info: {e}")
+        return None
+
+def get_gong_parties(conversation_id):
+    """Fetch parties information from Gong API using the extensive endpoint."""
+    try:
+        timestamp = str(int(time.time() * 1000))
+        request_id = str(int(time.time() * 1000))
+        path = f"/v2/calls/extensive"
+        method = "POST"
+        
+        # Request body
+        body = {
+            "filter": {
+                "callIds": [conversation_id]
+            },
+            "contentSelector" : {
+                "exposedFields":{
+                    "parties": True
+                }
+            }
+        }
+        body_json = json.dumps(body)
+        
+        # Generate signature
+        signature = get_gong_signature(
+            GONG_ACCESS_KEY,
+            GONG_SECRET_KEY,
+            timestamp,
+            request_id,
+            method,
+            path,
+            body_json
+        )
+        
+        # Make request
+        headers = {
+            "Authorization": f"Basic {base64.b64encode(f'{GONG_ACCESS_KEY}:{GONG_SECRET_KEY}'.encode()).decode()}",
+            "X-Gong-Timestamp": timestamp,
+            "X-Gong-Request-Id": request_id,
+            "X-Gong-Signature": signature,
+            "Content-Type": "application/json"
+        }
+        
+        response = requests.post(
+            f"{GONG_BASE_URL}{path}",
+            headers=headers,
+            json=body,
+            verify=False
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            print("--------------------------------")
+            print(data)
+            print("--------------------------------")
+            if data.get('calls') and len(data['calls']) > 0:
+                return data['calls'][0].get('parties', [])
+        else:
+            print(f"Error fetching parties info: {response.status_code} - {response.text}")
+        return []
+            
+    except Exception as e:
+        print(f"Error fetching parties info: {e}")
+        return []
+
 def fetch_gong_transcript(conversation_id):
     """Fetch transcript from Gong API."""
     try:
         timestamp = str(int(time.time() * 1000))
         request_id = str(int(time.time() * 1000))
-        path = "/v2/calls/transcript"  # Correct endpoint
+        path = "/v2/calls/transcript"
         method = "POST"
         
         # Request body
@@ -174,28 +321,40 @@ def fetch_gong_transcript(conversation_id):
         response = requests.post(
             f"{GONG_BASE_URL}{path}",
             headers=headers,
-            json=body,  # This will automatically handle JSON encoding
-            verify=False  # Disable SSL verification
+            json=body,
+            verify=False
         )
         
         if response.status_code == 200:
             try:
                 data = response.json()
-                # Extract transcript text from Gong response
                 transcript = []
                 
-                # Get the first call transcript (since we're querying for a specific call ID)
+                # Get the first call transcript
                 if data.get('callTranscripts') and len(data['callTranscripts']) > 0:
                     call_transcript = data['callTranscripts'][0]
+                    
+                    # Get parties information and create speaker name mapping
+                    parties = get_gong_parties(conversation_id)
+                    speaker_names = {}
+                    for party in parties:
+                        speaker_id = party.get('speakerId')
+                        if speaker_id:
+                            speaker_names[speaker_id] = party.get('name', f"User_{speaker_id}")
                     
                     # Process each transcript section
                     for section in call_transcript.get('transcript', []):
                         topic = section.get('topic', '')
+                        speaker_id = section.get('speakerId')
+                        
+                        # Get speaker name from cached mapping or use ID
+                        speaker_name = speaker_names.get(speaker_id, f"User_{speaker_id}")
+                        
                         for sentence in section.get('sentences', []):
                             text = sentence.get('text', '')
                             if text:
-                                # Format: [Topic] Speaker: Text
-                                transcript.append(f"[{topic}] {text}")
+                                # Format: [Topic] Speaker Name: Text
+                                transcript.append(f"[{topic}] {speaker_name}: {text}")
                 
                 return '\n'.join(transcript)
             except json.JSONDecodeError as e:
@@ -215,6 +374,15 @@ def process_transcript(transcript, ideal_pitch, coaching_guide, sales_rep, custo
     if not transcript:
         print("Failed to read transcript. Skipping...")
         return False
+
+    # Save transcript to a file
+    transcript_file = output_file.replace('.txt', '_transcript.txt')
+    try:
+        with open(transcript_file, 'w', encoding='utf-8') as f:
+            f.write(transcript)
+        print(f"Transcript saved to {transcript_file}")
+    except Exception as e:
+        print(f"Error saving transcript to file: {e}")
 
     # Initialize analyzer and report generator
     claude_analyzer = ClaudeAnalyzer()
